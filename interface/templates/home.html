@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h1 class="text-3xl font-bold mb-8">Welcome to the Factor Portfolio Optimizer</h1>
+
+  <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <a href="{{ url_for('data.data_step') }}"
+       class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition border border-gray-200">
+      <h2 class="text-xl font-semibold text-indigo-600 mb-2">Step 1: Load Data</h2>
+      <p class="text-slate-700 text-sm">
+        Upload factor CSV, define horizon and dates. Automatically fetch returns.
+      </p>
+    </a>
+
+    <a href="{{ url_for('factors.factors_step') }}"
+       class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition border border-gray-200">
+      <h2 class="text-xl font-semibold text-indigo-600 mb-2">Step 2: Factor Models</h2>
+      <p class="text-slate-700 text-sm">
+        Fit OLS or PCA + OLS models. Visualize beta loadings and residuals.
+      </p>
+    </a>
+
+    <a href="{{ url_for('optimizers.optimizers_step') }}"
+       class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition border border-gray-200">
+      <h2 class="text-xl font-semibold text-indigo-600 mb-2">Step 3: Optimizers</h2>
+      <p class="text-slate-700 text-sm">
+        Build portfolios using factor-based or return-only optimizers.
+      </p>
+    </a>
+
+    <a href="{{ url_for('backtest.backtest_step') }}"
+       class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition border border-gray-200">
+      <h2 class="text-xl font-semibold text-indigo-600 mb-2">Step 4: Backtest</h2>
+      <p class="text-slate-700 text-sm">
+        Evaluate performance, turnover, and compare strategies over time.
+      </p>
+    </a>
+  </div>
+{% endblock %}

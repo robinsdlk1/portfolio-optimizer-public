@@ -1,0 +1,461 @@
+{% extends "base.html" %}
+{% block title %}Portfolio optimisers{% endblock %}
+
+{% block content %}
+<div
+  class="container mx-auto px-6 py-6"
+  x-data='acdDesigner({
+      groupCandidates   : {{ group_candidates|tojson }},
+      numericCandidates : {{ numeric_candidates|tojson }},
+      groupValuesMap    : {{ group_values_map|tojson }}
+  })'>
+  <h1 class="text-2xl font-semibold mb-6">Step 3 - Portfolio optimisation</h1>
+
+  <form method="post"
+        action="{{ url_for('optimizers.optimizers_step') }}"
+        class="space-y-10 bg-white/5 backdrop-blur-sm p-6 rounded-lg shadow"
+        @submit="syncHiddenJson">
+
+    <section class="bg-white rounded-lg shadow p-6">
+      <h2 class="text-xl font-semibold mb-4">Advanced Constraint Designer</h2>
+
+      <template x-if="groupCandidates.length > 0">
+        <div class="flex items-center gap-4 mb-6">
+          <label class="font-medium">
+            Group by
+            <select x-model="rules.group_by"
+                    @change="loadGroupLabels"
+                    class="border rounded px-2 py-1 ml-2">
+              <option value="">-- Select Column --</option>
+              <template x-for="col in groupCandidates" :key="col">
+                <option :value="col" x-text="col"></option>
+              </template>
+            </select>
+          </label>
+        </div>
+      </template>
+
+      <template x-if="groupLabels.length > 0">
+        <div class="overflow-x-auto mb-8">
+          <h3 class="font-medium mb-2">Group Constraints</h3>
+          <table class="min-w-full divide-y divide-gray-200 text-sm">
+            <thead class="bg-gray-100">
+              <tr>
+                <th class="px-3 py-2 text-left">Group</th>
+                <th class="px-3 py-2 text-right">Count</th>
+                <th class="px-3 py-2 text-right">Min Weight</th>
+                <th class="px-3 py-2 text-right">Max Weight</th>
+                <th class="px-3 py-2 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <template x-for="[label, count] in groupLabels" :key="label">
+                <tr>
+                  <td class="px-3 py-1 font-medium" x-text="label"></td>
+                  <td class="px-3 py-1 text-right" x-text="count"></td>
+                  <td class="px-3 py-1 text-right">
+                    <input type="number" 
+                           step="0.01" 
+                           min="0" 
+                           max="1"
+                           placeholder="0.0"
+                           class="border rounded px-1 py-0.5 w-20 text-center"
+                           :value="rules.group_min[label] || ''"
+                           @input="updateGroupMin(label, $event)">
+                  </td>
+                  <td class="px-3 py-1 text-right">
+                    <input type="number" 
+                           step="0.01" 
+                           min="0" 
+                           max="1"
+                           placeholder="1.0"
+                           class="border rounded px-1 py-0.5 w-20 text-center"
+                           :value="rules.group_caps[label] || ''"
+                           @input="updateGroupMax(label, $event)">
+                  </td>
+                  <td class="px-3 py-1 text-center">
+                    <button type="button"
+                            @click="removeGroup(label)"
+                            class="text-red-600 hover:text-red-800 font-bold px-2">
+                      x
+                    </button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </template>
+
+      <template x-if="numericCandidates.length > 0">
+        <div class="mb-6">
+          <h3 class="font-medium mb-2">Numeric Range Constraints</h3>
+          <div class="grid grid-cols-2 md:grid-cols-6 gap-3 items-end mb-4">
+            <label class="text-sm">
+              Column
+              <select x-model="numeric.column" class="border rounded px-2 py-1 w-full mt-1">
+                <option value="">-- Select --</option>
+                <template x-for="c in numericCandidates" :key="c.name">
+                  <option :value="c.name" x-text="c.name"></option>
+                </template>
+              </select>
+            </label>
+            <label class="text-sm">
+              Low
+              <input type="number" 
+                     step="0.01"
+                     x-model.number="numeric.low"
+                     class="border rounded px-2 py-1 w-full mt-1"
+                     placeholder="Min">
+            </label>
+            <label class="text-sm">
+              High
+              <input type="number" 
+                     step="0.01"
+                     x-model.number="numeric.high"
+                     class="border rounded px-2 py-1 w-full mt-1"
+                     placeholder="Max">
+            </label>
+            <label class="text-sm">
+              Cap
+              <input type="number" 
+                     step="0.01" 
+                     min="0" 
+                     max="1"
+                     x-model.number="numeric.max"
+                     class="border rounded px-2 py-1 w-full mt-1"
+                     placeholder="0.10">
+            </label>
+            <label class="text-sm flex items-center">
+              <input type="checkbox" x-model="numeric.longOnly" class="mr-1">
+              Long-only
+            </label>
+            <button type="button"
+                    @click="addRangeCap"
+                    :disabled="!numeric.column || numeric.max == null"
+                    class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+              Add
+            </button>
+          </div>
+
+          <div class="flex flex-wrap gap-2">
+            <template x-for="(rc, idx) in rules.range_caps" :key="idx">
+              <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm inline-flex items-center">
+                <span x-text="formatRangeCap(rc)"></span>
+                <button type="button"
+                        class="ml-2 font-bold hover:text-red-600"
+                        @click="removeRangeCap(idx)">×</button>
+              </span>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <input type="hidden" name="constraint_json" x-ref="hiddenJson">
+    </section>
+
+    <section>
+      <h2 class="text-xl font-medium mb-2">Naive optimisers</h2>
+      <div class="flex flex-col space-y-1 ml-4">
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="naive_optimizers" value="equal" class="mr-2"
+                 {{ 'checked' if 'equal' in request.form.getlist('naive_optimizers') else '' }}>
+          Equal-weight
+        </label>
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="naive_optimizers" value="inv_vol" class="mr-2"
+                 {{ 'checked' if 'inv_vol' in request.form.getlist('naive_optimizers') else '' }}>
+          Volatility-parity
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-medium mb-2">Classical mean-variance</h2>
+      <div class="flex flex-col space-y-1 ml-4">
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="classic_optimizers" value="min_vol" class="mr-2"
+                 {{ 'checked' if 'min_vol' in request.form.getlist('classic_optimizers') else '' }}>
+          Min volatility
+        </label>
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="classic_optimizers" value="max_sharpe" class="mr-2"
+                 {{ 'checked' if 'max_sharpe' in request.form.getlist('classic_optimizers') else '' }}>
+          Max Sharpe
+        </label>
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="classic_optimizers" value="target_return" class="mr-2"
+                 {{ 'checked' if 'target_return' in request.form.getlist('classic_optimizers') else '' }}>
+          Target return
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-medium mb-2">Factor optimisers</h2>
+      <div class="flex flex-col space-y-1 ml-4">
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="factor_optimizers" value="sharpe" class="mr-2"
+                 {{ 'checked' if 'sharpe' in request.form.getlist('factor_optimizers') else '' }}>
+          Factor Sharpe
+        </label>
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="factor_optimizers" value="target_return" class="mr-2"
+                 {{ 'checked' if 'target_return' in request.form.getlist('factor_optimizers') else '' }}>
+          Factor target return
+        </label>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4 mt-3 ml-4">
+        <label>
+          Risk aversion (lambda)
+          <input type="number" name="risk_aversion" step="0.1" min="0"
+                 class="border rounded px-2 py-1 w-28 ml-1"
+                 value="{{ request.form.get('risk_aversion', 1.0) }}">
+        </label>
+        <label>
+          Target return
+          <input type="number" name="target_return" step="0.01"
+                 class="border rounded px-2 py-1 w-28 ml-1"
+                 value="{{ request.form.get('target_return', 0.05) }}">
+        </label>
+      </div>
+    </section>
+
+    <fieldset class="border rounded-lg p-4">
+      <legend class="px-2 text-lg font-medium">Constraints</legend>
+
+      <div class="grid md:grid-cols-3 gap-4">
+        <label class="inline-flex items-center">
+          <input type="checkbox" name="long_only" class="mr-2"
+                 {{ 'checked' if request.form.get('long_only', 'on') == 'on' else '' }}>
+          Long-only
+        </label>
+
+        <label>
+          Min weight
+          <input type="number" name="min_weight" step="0.01" min="-1"
+                 class="border rounded px-2 py-1 w-24 ml-1"
+                 value="{{ request.form.get('min_weight', 0.0) }}">
+        </label>
+        <label>
+          Max weight
+          <input type="number" name="max_weight" step="0.01" min="0"
+                 class="border rounded px-2 py-1 w-24 ml-1"
+                 value="{{ request.form.get('max_weight', 1.0) }}">
+        </label>
+
+        <label>
+          Net weight (Sum w)
+          <input type="number" name="weight_sum" step="0.1" min="0"
+                 class="border rounded px-2 py-1 w-24 ml-1"
+                 value="{{ request.form.get('weight_sum', 1.0) }}" readonly>
+        </label>
+
+        <label>
+          Gross exposure (L1 norm)
+          <input type="number" name="gross_cap" step="0.1" min="1"
+                 class="border rounded px-2 py-1 w-24 ml-1"
+                 value="{{ request.form.get('gross_cap', 1.0) }}">
+        </label>
+
+        <label>
+          Max turnover (L1 of Δw)
+          <input type="number" name="turnover_cap" step="0.05" min="0"
+                 class="border rounded px-2 py-1 w-24 ml-1"
+                 value="{{ request.form.get('turnover_cap', 0.2) }}">
+        </label>
+
+        <label>
+          Max active assets K
+          <input type="number" name="max_assets" step="1" min="1"
+                 class="border rounded px-2 py-1 w-24 ml-1"
+                 value="{{ request.form.get('max_assets', '') }}"
+                 placeholder="e.g. 10">
+        </label>
+      </div>
+    </fieldset>
+
+    <div>
+      <button type="submit"
+              class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded">
+        Optimise
+      </button>
+    </div>
+
+  </form>
+
+  {% if graphs_ready %}
+    <div class="mt-8">
+      <label for="graph_selector" class="block text-lg font-medium mb-2">
+        Choose graph:
+      </label>
+      <select id="graph_selector" class="border rounded px-3 py-1 w-64">
+        <option value="weights">plot_weights_bar</option>
+        <option value="pie">plot_weight_pie</option>
+        <option value="risk">plot_risk_contributions</option>
+      </select>
+    </div>
+
+    {% set graph_order = [
+        ('weights', 'plot_weights_bar'),
+        ('pie', 'plot_weight_pie'),
+        ('risk', 'plot_risk_contributions'),
+      ] %}
+
+    {% for internal_key, pretty_name in graph_order %}
+      {% if graphs.get(internal_key) %}
+        <div class="graph-section mt-10" data-graph-type="{{ internal_key }}">
+          <h2 class="text-xl font-medium">
+            {{ pretty_name.replace('_', ' ')|title }}
+          </h2>
+          {% for label, html in graphs[internal_key] %}
+            <h3 class="text-lg font-semibold mt-6">{{ label }}</h3>
+            <div class="mt-2">{{ html|safe }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const selector = document.getElementById('graph_selector');
+        const sections = document.querySelectorAll('.graph-section');
+        function updateVisibility () {
+          const choice = selector.value;
+          sections.forEach(sec => {
+            sec.style.display = (sec.dataset.graphType === choice) ? 'block' : 'none';
+          });
+        }
+        selector.addEventListener('change', updateVisibility);
+        updateVisibility();  // initialise
+      });
+    </script>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+window.acdDesigner = ({ groupCandidates, numericCandidates, groupValuesMap }) => ({
+  groupCandidates: groupCandidates || [],
+  numericCandidates: numericCandidates || [],
+  groupValuesMap: groupValuesMap || {},
+
+  rules: {
+    group_by   : '',
+    group_caps : {},
+    group_min  : {},
+    range_caps : []
+  },
+
+  groupLabels: [],
+  numeric: {
+    column   : '',
+    low      : null,
+    high     : null,
+    max      : null,
+    longOnly : true
+  },
+
+  init() {
+    console.log('ACD Designer initialized');
+    console.log('Group candidates:', this.groupCandidates);
+    console.log('Numeric candidates:', this.numericCandidates);
+    
+    // Set initial values if available
+    if (this.groupCandidates.length > 0) {
+      this.rules.group_by = this.groupCandidates[0];
+      this.loadGroupLabels();
+    }
+    if (this.numericCandidates.length > 0) {
+      this.numeric.column = this.numericCandidates[0].name;
+    }
+  },
+
+  loadGroupLabels() {
+    console.log('Loading group labels for:', this.rules.group_by);
+    if (!this.rules.group_by) {
+      this.groupLabels = [];
+      return;
+    }
+    
+    const obj = this.groupValuesMap[this.rules.group_by] || {};
+    this.groupLabels = Object.entries(obj);
+    console.log('Group labels loaded:', this.groupLabels);
+  },
+
+  updateGroupMin(label, event) {
+    const value = event.target.value;
+    if (value === '' || value === null || value === undefined) {
+      delete this.rules.group_min[label];
+    } else {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        this.rules.group_min[label] = numValue;
+      }
+    }
+  },
+
+  updateGroupMax(label, event) {
+    const value = event.target.value;
+    if (value === '' || value === null || value === undefined) {
+      delete this.rules.group_caps[label];
+    } else {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        this.rules.group_caps[label] = numValue;
+      }
+    }
+  },
+
+  removeGroup(label) {
+    delete this.rules.group_caps[label];
+    delete this.rules.group_min[label];
+    console.log('Removed group constraints for:', label);
+  },
+
+  addRangeCap() {
+    if (!this.numeric.column || this.numeric.max == null) {
+      console.log('Cannot add range cap: missing column or max value');
+      return;
+    }
+
+    const newCap = {
+      column: this.numeric.column,
+      low: this.numeric.low,
+      high: this.numeric.high,
+      max: this.numeric.max,
+      mode: this.numeric.longOnly ? 'long_only' : 'net'
+    };
+
+    this.rules.range_caps.push(newCap);
+    console.log('Added range cap:', newCap);
+
+    // Reset numeric form
+    this.numeric.low = null;
+    this.numeric.high = null;
+    this.numeric.max = null;
+  },
+
+  removeRangeCap(index) {
+    this.rules.range_caps.splice(index, 1);
+    console.log('Removed range cap at index:', index);
+  },
+
+  formatRangeCap(rc) {
+    const low = rc.low !== null && rc.low !== undefined ? rc.low : '-∞';
+    const high = rc.high !== null && rc.high !== undefined ? rc.high : '∞';
+    return `${rc.column}[${low}, ${high}] ≤ ${rc.max}`;
+  },
+
+  syncHiddenJson() {
+    const jsonStr = JSON.stringify(this.rules);
+    if (this.$refs.hiddenJson) {
+      this.$refs.hiddenJson.value = jsonStr;
+      console.log('Synced hidden JSON:', jsonStr);
+    }
+  }
+});
+</script>
+{% endblock %}

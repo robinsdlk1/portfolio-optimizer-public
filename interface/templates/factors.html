@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="text-2xl font-semibold mb-6">Step 2 — Factor modelling</h2>
+
+<form action="{{ url_for('factors.factors_step') }}" method="post" class="grid gap-6 mb-8" id="factor-form">
+  <section class="space-y-2">
+    <label class="block font-medium" for="model-select">Model type</label>
+    <select name="model_type" id="model-select" class="border rounded p-2 w-56">
+      <option value="ols" {% if model_type=='ols' %}selected{% endif %}>OLS (all factors)</option>
+      <option value="pca" {% if model_type=='pca' %}selected{% endif %}>OLS + PCA</option>
+    </select>
+    <p class="text-slate-500 text-sm">
+      Choose "OLS + PCA" if you want to reduce dimensionality before regression.
+    </p>
+  </section>
+
+  <section>
+    <button id="elbow-btn"
+            name="action" value="elbow" type="submit"
+            class="bg-indigo-600 text-white py-2 px-6 rounded-lg w-max {% if model_type != 'pca' %}hidden{% endif %}">
+      Compute PCA elbow
+    </button>
+    <p class="text-slate-500 text-sm {% if model_type != 'pca' %}hidden{% endif %}">
+      First compute the elbow curve to inspect cumulative explained variance.
+      You will pick a selection rule in the next step.
+    </p>
+  </section>
+
+  {% if elbow_html %}
+  <section class="space-y-3">
+    <h3 class="text-lg font-semibold">Elbow (cumulative explained variance)</h3>
+    <div class="rounded border p-2 bg-white">
+      {{ elbow_html | safe }}
+    </div>
+    <p class="text-slate-500 text-sm">
+      The elbow helps decide how many principal components are useful. It is a guide, not a constraint.
+    </p>
+  </section>
+  {% endif %}
+
+  {% if elbow_html %}
+  <section id="pca-selection" class="space-y-4">
+    <h3 class="text-lg font-semibold">Select number of principal components</h3>
+    <div>
+      <label class="block font-medium mb-1">Selection rule</label>
+
+      <label class="mr-4">
+        <input type="radio" name="pca_mode" value="var"
+               {% if pca_mode not in ['manual','cv'] %}checked{% endif %}>
+        Target variance
+      </label>
+
+      <label class="mr-4">
+        <input type="radio" name="pca_mode" value="manual"
+               {% if pca_mode == 'manual' %}checked{% endif %}>
+        Manual k
+      </label>
+
+      <label>
+        <input type="radio" name="pca_mode" value="cv"
+               {% if pca_mode == 'cv' %}checked{% endif %}>
+        Cross-validation (choose k)
+      </label>
+
+      <p class="text-slate-500 text-sm mt-1">
+        In cross-validation, k is chosen at fit time to maximize mean out-of-fold R2.
+        You do not enter k or a variance target for this mode. It can lead to using only one component.
+      </p>
+    </div>
+
+    <div id="pca-var-box" class="{% if pca_mode in ['manual','cv'] %}hidden{% endif %}">
+      <label class="block font-medium mb-1">Target explained variance (percent)</label>
+      <input type="number"
+             name="target_var"
+             min="50" max="99" step="1"
+             value="{{ target_var|default(95) }}"
+             class="border rounded p-2 w-32">
+      <p class="text-slate-500 text-sm mt-1">
+        We pick the smallest k whose cumulative explained variance is at least this percentage.
+      </p>
+    </div>
+
+    <div id="pca-manual-box" class="{% if pca_mode != 'manual' %}hidden{% endif %}">
+      <label class="block font-medium mb-1">Number of components (k)</label>
+      <input type="number"
+             name="pca_n"
+             min="1" step="1"
+             value="{{ pca_n|default(5) }}"
+             class="border rounded p-2 w-24">
+      <p class="text-slate-500 text-sm mt-1">
+        We fit exactly k principal components.
+      </p>
+    </div>
+
+    <div class="text-sm text-slate-700 bg-slate-50 border rounded p-2">
+      <strong>Current selection:</strong>
+      <span id="pca-summary">
+        {% if pca_mode == 'manual' %}
+          PCA (manual), k = {{ pca_n|default(5) }}.
+        {% elif pca_mode == 'cv' %}
+          PCA (cross-validation). k will be chosen at fit time.
+        {% else %}
+          PCA (target variance), {{ target_var|default(95) }} percent.
+        {% endif %}
+      </span>
+    </div>
+  </section>
+  {% endif %}
+
+  <section>
+    <button id="fit-btn"
+            name="action" value="fit" type="submit"
+            class="bg-green-600 text-white py-2 px-6 rounded-lg w-max
+                   disabled:opacity-50 disabled:cursor-not-allowed">
+      Fit model
+    </button>
+    <p id="fit-hint" class="text-slate-500 text-sm mt-1"></p>
+  </section>
+
+</form>
+
+<section class="grid gap-8">
+
+  {% if beta_chart %}
+  <section>
+    <h3 class="text-lg font-semibold mb-2">Factor exposures (betas)</h3>
+    <div class="rounded border p-2 bg-white">
+      {{ beta_chart | safe }}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if factor_table %}
+  <section>
+    <h3 class="text-lg font-semibold mb-2">Factor loadings table</h3>
+    <div class="rounded border p-2 bg-white overflow-auto">
+      {{ factor_table | safe }}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if summary_html %}
+  <section>
+    <h3 class="text-lg font-semibold mb-2">Regression summary</h3>
+    <pre class="bg-slate-50 border rounded p-4 text-xs overflow-auto whitespace-pre-wrap font-mono">{{ summary_html|safe }}</pre>
+  </section>
+  {% endif %}
+
+  {% if resid_html %}
+  <section>
+    <h3 class="text-lg font-semibold mb-2">Residual diagnostics</h3>
+    <div class="rounded border p-2 bg-white">
+      {{ resid_html | safe }}
+    </div>
+  </section>
+  {% endif %}
+
+</section>
+
+<script>
+const modelSelect = document.getElementById('model-select');
+const elbowBtn = document.getElementById('elbow-btn');
+const fitBtn = document.getElementById('fit-btn');
+const fitHint = document.getElementById('fit-hint');
+
+function elbowPresent() {
+  return !!document.getElementById('pca-selection');
+}
+
+function applyModelUI() {
+  const isPCA = modelSelect.value === 'pca';
+
+  if (elbowBtn) elbowBtn.classList.toggle('hidden', !isPCA);
+
+  if (fitBtn) {
+    const disableFit = isPCA && !elbowPresent();
+    fitBtn.toggleAttribute('disabled', disableFit);
+    fitBtn.classList.toggle('opacity-50', disableFit);
+    fitBtn.classList.toggle('cursor-not-allowed', disableFit);
+
+    if (fitHint) {
+      fitHint.textContent = disableFit
+        ? 'Compute the elbow first to enable fitting in PCA mode.'
+        : '';
+    }
+  }
+}
+
+modelSelect?.addEventListener('change', applyModelUI);
+document.addEventListener('DOMContentLoaded', applyModelUI);
+
+const modeRadios = document.querySelectorAll('input[name="pca_mode"]');
+const varBox = document.getElementById('pca-var-box');
+const manualBox = document.getElementById('pca-manual-box');
+
+function applyModeUI() {
+  const checked = document.querySelector('input[name="pca_mode"]:checked');
+  const mode = checked ? checked.value : 'var';
+
+  const showVar = mode === 'var';
+  const showManual = mode === 'manual';
+
+  if (varBox)    varBox.classList.toggle('hidden', !showVar);
+  if (manualBox) manualBox.classList.toggle('hidden', !showManual);
+}
+
+modeRadios.forEach(r => r.addEventListener('change', applyModeUI));
+document.addEventListener('DOMContentLoaded', applyModeUI);
+function updatePcaSummary() {
+  const summaryEl = document.getElementById('pca-summary');
+  if (!summaryEl) return;
+
+  const checked = document.querySelector('input[name="pca_mode"]:checked');
+  const mode = checked ? checked.value : 'var';
+
+  const targetInput = document.querySelector('input[name="target_var"]');
+  const kInput = document.querySelector('input[name="pca_n"]');
+
+  if (mode === 'manual') {
+    const k = (kInput && kInput.value) ? kInput.value : '5';
+    summaryEl.textContent = 'PCA (manual), k = ' + k + '.';
+  } else if (mode === 'cv') {
+    summaryEl.textContent = 'PCA (cross-validation). k will be chosen at fit time.';
+  } else {
+    const tv = (targetInput && targetInput.value) ? targetInput.value : '95';
+    summaryEl.textContent = 'PCA (target variance), ' + tv + ' percent.';
+  }
+}
+
+document.querySelectorAll('input[name="pca_mode"]').forEach(function(r) {
+  r.addEventListener('change', function() {
+    applyModeUI();
+    updatePcaSummary();
+  });
+});
+
+const targetInput = document.querySelector('input[name="target_var"]');
+if (targetInput) targetInput.addEventListener('input', updatePcaSummary);
+
+const kInput = document.querySelector('input[name="pca_n"]');
+if (kInput) kInput.addEventListener('input', updatePcaSummary);
+
+document.addEventListener('DOMContentLoaded', updatePcaSummary);
+</script>
+{% endblock %}

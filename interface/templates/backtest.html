@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2 class="text-2xl font-semibold mb-6">Step 4 - Back-test (rolling)</h2>
+
+<form method="post" class="space-y-6 mb-10"
+      action="{{ url_for('backtest.backtest_step') }}">
+
+  <label class="block text-lg">
+    Choose portfolio&nbsp;:
+    <select name="which_portfolio"
+            class="border rounded px-3 py-1 ml-2">
+      {% for p in portfolios %}
+        <option value="{{ p }}"
+                {{ 'selected' if p == selected else '' }}>
+          {{ p }}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <div class="flex flex-wrap gap-6">
+
+    <label class="block">
+      Rebalance&nbsp;freq&nbsp;
+      <select name="rebalance_freq"
+              class="border rounded px-3 py-1 ml-1">
+        <option value="D">Daily</option>
+        <option value="W-FRI" selected>Weekly&nbsp;(Fri)</option>
+        <option value="BM">Monthly&nbsp;(EOM)</option>
+        <option value="">Buy-&-hold</option>
+      </select>
+    </label>
+
+    <label class="block">
+      Window&nbsp;length&nbsp;(days)
+      <input type="number" name="window_len" value="60" min="20" step="10"
+             class="border rounded px-3 py-1 w-24 ml-1">
+    </label>
+
+    <label class="block">
+      Cost&nbsp;(bps)
+      <input type="number" name="cost_bps" value="0" min="0" step="1"
+             class="border rounded px-3 py-1 w-20 ml-1">
+    </label>
+
+  </div>
+
+  <button type="submit"
+          class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2 rounded">
+    Run back-test
+  </button>
+</form>
+
+{% if pnl_ready %}
+
+  <div class="mt-6">
+    <label for="bt_graph_selector" class="block text-lg font-medium mb-2">
+      Choose graph family&nbsp;:
+    </label>
+    <select id="bt_graph_selector" class="border rounded px-3 py-1 w-64">
+      <option value="performance">Performance</option>
+      <option value="allocation">Allocation</option>   <!-- NEW -->
+      <option value="risk">Risk</option>
+      <option value="distribution">Distribution</option>
+    </select>
+  </div>
+
+  {% for cat, figs in graphs.items() %}
+    <div class="bt-graph-section mt-10" data-cat="{{ cat }}">
+      {% for label, html in figs %}
+        <h3 class="text-xl font-semibold mb-4">{{ label }}</h3>
+        <div class="mb-8">{{ html|safe }}</div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+
+  <h3 class="text-xl font-semibold mt-8">Realized statistics</h3>
+  <table class="mt-2 border-collapse">
+    {% for k, v in metrics.items() %}
+      <tr>
+        <td class="border px-2 py-1 font-medium">{{ k }}</td>
+        <td class="border px-2 py-1 text-right">
+          {{ "{:,.2%}".format(v) if 'Return' in k or 'Vol' in k else "{:,.2f}".format(v) }}
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const selector = document.getElementById('bt_graph_selector');
+  if (!selector) return;
+  const sections = document.querySelectorAll('.bt-graph-section');
+
+  function updateVis() {
+    const sel = selector.value;
+    sections.forEach(sec => {
+      sec.style.display = (sec.dataset.cat === sel) ? 'block' : 'none';
+    });
+  }
+  selector.addEventListener('change', updateVis);
+  updateVis();
+});
+</script>
+{% endblock %}
